@@ -5,6 +5,8 @@ import pandas as pd
 import dill
 
 from src.exception import CustomException
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import r2_score
 
 def save_object(file_path, obj):
     try:
@@ -25,30 +27,31 @@ def save_object(file_path, obj):
 
 from sklearn.metrics import r2_score
 
-def evaluate_models(X_train, y_train, X_test, y_test, models):
+def evaluate_models(X_train, y_train, X_test, y_test, models: dict, params: dict):
     try:
         report = {}
+        best_model_overall = None
+        best_score = float("-inf")
 
-        for i in range(len(list(models))):
-            model = list(models.values())[i]
-            model_name = list(models.keys())[i]
+        for model_name in models:
+            model = models[model_name]
+            param_grid = params.get(model_name, {})
 
-            # Train model
-            model.fit(X_train, y_train)
+            grid_search = GridSearchCV(model, param_grid, cv=3, scoring='r2', n_jobs=-1)
+            grid_search.fit(X_train, y_train)
 
-            # Predictions
-            y_train_pred = model.predict(X_train)
-            y_test_pred = model.predict(X_test)
+            best_model = grid_search.best_estimator_
 
-            # R² scores
-            train_model_score = r2_score(y_train, y_train_pred)
+            y_test_pred = best_model.predict(X_test)
             test_model_score = r2_score(y_test, y_test_pred)
 
-            # Save only test score (you can also store both if needed)
             report[model_name] = test_model_score
 
-        return report
+            if test_model_score > best_score:
+                best_score = test_model_score
+                best_model_overall = best_model
+
+        return report, best_model_overall
 
     except Exception as e:
         raise CustomException(e, sys)
-
